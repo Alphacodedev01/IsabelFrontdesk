@@ -1,13 +1,22 @@
 <template>
-  <CalendarioReservas />
+  <div>
+    <h1>Reservas</h1>
+    <!-- Aquí insertamos el componente del calendario -->
+    <Calendario />
+  </div>
 </template>
 
 <script>
-import CalendarioReservas from '../components/CalendarioReservas.vue';
+// Importa el componente del calendario
+import Calendario from '@/components/CalendarioReservas.vue';
 
 export default {
   components: {
-    CalendarioReservas
+    Calendario // Registra el componente para usarlo
   }
-}
+};
 </script>
+
+<style scoped>
+/* Estilos para la página de reservas */
+</style>

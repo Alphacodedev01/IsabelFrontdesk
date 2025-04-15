@@ -10,40 +10,40 @@ import {
 
 <template>
   <div class="menu">
-    <a href="#" class="link dashboard">
+    <NuxtLink to="/" class="link dashboard">
       <span class="link-icon">
         <HomeIcon class="icon-hero" />
       </span>
       <span class="link-title">Dashboard</span>
-    </a>
+    </NuxtLink>
 
-    <a href="#" class="link reservas">
+    <NuxtLink to="/reservas" class="link reservas">
       <span class="link-icon">
         <CalendarDaysIcon class="icon-hero" />
       </span>
       <span class="link-title">Reservas</span>
-    </a>
+    </NuxtLink>
 
-    <a href="#" class="link parametrizacion">
+    <NuxtLink to="/parametrizacion" class="link parametrizacion">
       <span class="link-icon">
         <AdjustmentsHorizontalIcon class="icon-hero" />
       </span>
       <span class="link-title">Parametrización</span>
-    </a>
+    </NuxtLink>
 
-    <a href="#" class="link mantenimiento">
+    <NuxtLink to="/mantenimiento" class="link mantenimiento">
       <span class="link-icon">
         <WrenchScrewdriverIcon class="icon-hero" />
       </span>
       <span class="link-title">Mantenimiento</span>
-    </a>
+    </NuxtLink>
 
-    <a href="#" class="link reportes">
+    <NuxtLink to="/reportes" class="link reportes">
       <span class="link-icon">
         <ChartBarIcon class="icon-hero" />
       </span>
       <span class="link-title">Reportes</span>
-    </a>
+    </NuxtLink>
   </div>
 </template>
 
@@ -60,7 +60,7 @@ import {
   flex-direction: column;
   align-items: center;
   border-radius: 0;
-  box-shadow: 10px 0 25px 0 rgba(#000, 0.075);
+  box-shadow: 10px 0 25px 0 rgba(0, 0, 0, 0.075);
   transition: width 0.2s ease-in;
   overflow: hidden;
   z-index: 10;
