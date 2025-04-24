@@ -16,11 +16,15 @@
     "@fullcalendar/vue3": "^6.1.17",
     "@heroicons/vue": "^2.2.0",
     "dayjs": "^1.11.13",
+    "firebase": "^11.6.0",
     "nuxt": "^3.16.2",
     "vue": "^3.5.13",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "vue-toastification": "^2.0.0-rc.5"
   },
   "devDependencies": {
-    "@nuxtjs/tailwindcss": "^6.13.2"
+    "@nuxtjs/tailwindcss": "^6.13.2",
+    "@types/node": "^22.14.1",
+    "vue-tsc": "^2.2.8"
   }
 }

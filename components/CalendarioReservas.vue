@@ -1,44 +1,84 @@
 <template>
   <div class="calendario-container">
-    <div class="navigation">
-      <button @click="prevWeek">Semana Anterior</button>
-      <span class="date-range">{{ currentMonth }}</span>
-      <button @click="nextWeek">Semana Siguiente</button>
+    <!-- Barra de navegación superior -->
+    <div class="calendar-header">
+      <div class="navigation-controls">
+        <button class="nav-btn" @click="prevMonth">&lt;</button>
+        <button class="today-btn" @click="goToToday">Hoy</button>
+        <button class="nav-btn" @click="nextMonth">&gt;</button>
+      </div>
+      <div class="view-controls">
+        <button :class="{ active: viewMode === '10days' }" @click="setViewMode('10days')">10 días</button>
+        <button :class="{ active: viewMode === 'month' }" @click="setViewMode('month')">Mes</button>
+      </div>
     </div>
-    <div class="table-container">
-      <table>
-        <thead>
-          <tr>
-            <th class="room-header">Habitación</th>
-            <th v-for="day in currentWeek" :key="day.date">{{ day.dayNumber }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="room in rooms" :key="room.number">
-            <td class="room-cell">
-              <div class="room-info">
-                <span :class="{'room-indicator': true, 'dobl': room.type === 'DOBL'}"></span>
-                {{ room.number }} {{ room.type }}
-              </div>
-            </td>
-            <td v-for="(day, index) in currentWeek" 
-                :key="day.date" 
+
+    <!-- Contenedor principal del calendario -->
+    <div class="calendar-body">
+      <!-- Columna fija de habitaciones -->
+      <div class="rooms-column">
+        <div class="room-header">Habitación</div>
+        <div v-for="room in rooms" :key="room.number" class="room-row">
+          <div class="room-info">
+            <span :class="{'room-indicator': true, [room.type.toLowerCase()]: true}"></span>
+            {{ room.number }} {{ room.type }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Área scrollable de días -->
+      <div class="days-area">
+        <div class="calendar-content">
+          <!-- Header de días -->
+          <div class="days-header">
+            <div v-for="day in currentWeek" :key="day.date" class="day-header">
+              <div class="day-number">{{ day.dayNumber }}</div>
+              <div class="day-name">{{ getDayName(day.date) }}</div>
+            </div>
+          </div>
+
+          <!-- Grid de días -->
+          <div class="days-grid">
+            <div v-for="room in rooms" :key="room.number" class="room-days">
+              <div
+                v-for="day in currentWeek"
+                :key="day.date"
                 class="day-cell"
-                :style="{ position: 'relative' }">
-              <template v-if="getReservation(room.number, day.date)">
-                <div v-if="isFirstDayOfReservation(room.number, day.date)"
-                     :class="['reservation', getReservationClass(room.number, day.date)]"
-                     :style="getReservationStyle(room.number, day.date)">
-                  <div class="reservation-content">
-                    <span class="guest-name">{{ getReservation(room.number, day.date).guestName }}</span>
-                    <span class="price">{{ getReservation(room.number, day.date).price }}€</span>
+                :class="{ 'selecting': isInSelectionRange(room.number, day.date) }"
+                @mousedown="startSelection(room.number, day.date)"
+                @mouseenter="updateSelection(room.number, day.date)"
+                @mouseup="endSelection"
+              >
+                <template v-if="getReservation(room.number, day.date)">
+                  <div
+                    v-if="isFirstDayOfReservation(room.number, day.date)"
+                    :class="['reservation', getReservationClass(room.number, day.date)]"
+                    :style="getReservationStyle(room.number, day.date)"
+                  >
+                    <div class="reservation-content">
+                      <span class="guest-name">{{ getReservation(room.number, day.date).guestName }}</span>
+                    </div>
                   </div>
-                </div>
-              </template>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal para nueva reserva -->
+    <div v-if="showModal" class="modal-overlay">
+      <div class="modal">
+        <h3>Nueva Reserva</h3>
+        <p>{{ selectedRoom }} del {{ selectionStart }} al {{ selectionEnd }}</p>
+        <label>Nombre:</label>
+        <input v-model="newReservation.guestName" />
+        <label>Precio:</label>
+        <input v-model="newReservation.price" type="number" />
+        <button @click="saveReservation">Guardar</button>
+        <button @click="cancelReservation">Cancelar</button>
+      </div>
     </div>
   </div>
 </template>
@@ -74,92 +114,68 @@ export default {
         guestName: 'BERTA Aizperro',
         price: '270',
         status: 'confirmed'
-      },
-      {
-        roomNumber: '101',
-        startDate: '2025-04-17',
-        endDate: '2025-04-19',
-        guestName: 'Ainhoa Zuazu',
-        price: '200',
-        status: 'pending'
-      },
-      {
-        roomNumber: '102',
-        startDate: '2025-04-07',
-        endDate: '2025-04-09',
-        guestName: 'Lorena Aida',
-        price: '630',
-        status: 'pending'
-      },
-      {
-        roomNumber: '102',
-        startDate: '2024-03-14',
-        endDate: '2024-03-16',
-        guestName: 'BERTA Aizperro',
-        price: '270',
-        status: 'confirmed'
-      },
-      {
-        roomNumber: '102',
-        startDate: '2024-03-17',
-        endDate: '2024-03-19',
-        guestName: 'Paolo Rossi',
-        price: '603',
-        status: 'pending'
       }
     ]);
 
     const currentDate = ref(dayjs());
-
     const currentMonth = computed(() => {
-      return currentDate.value.format('MMMM YYYY');
+      const month = currentDate.value.format('MMMM YYYY');
+      return month.charAt(0).toUpperCase() + month.slice(1);
     });
 
     const currentWeek = computed(() => {
-      const startOfWeek = currentDate.value.startOf('week');
-      const week = [];
-      for (let i = 0; i < 16; i++) {
-        const day = startOfWeek.add(i, 'day');
-        week.push({
+      const start = dayjs(startDate.value);
+      const end = dayjs(endDate.value);
+      const daysToShow = end.diff(start, 'day') + 1;
+      const days = [];
+      
+      for (let i = 0; i < daysToShow; i++) {
+        const day = start.add(i, 'day');
+        days.push({
           dayNumber: day.format('D'),
           date: day.format('YYYY-MM-DD')
         });
       }
-      return week;
+      return days;
     });
 
     const getReservation = (roomNumber, date) => {
-      return reservations.value.find(r => 
-        r.roomNumber === roomNumber &&
-        dayjs(date).isBetween(r.startDate, r.endDate, 'day', '[]')
-      );
-    };
-
-    const getReservationClass = (roomNumber, date) => {
-      const reservation = getReservation(roomNumber, date);
-      if (!reservation) return '';
-      return reservation.status;
+      return reservations.value.find(r => {
+        const checkDate = dayjs(date);
+        const startDate = dayjs(r.startDate);
+        const endDate = dayjs(r.endDate);
+        
+        return r.roomNumber === roomNumber &&
+               (checkDate.isBetween(startDate, endDate.subtract(1, 'day'), 'day', '[]') ||
+                checkDate.isSame(startDate, 'day'));
+      });
     };
 
     const isFirstDayOfReservation = (roomNumber, date) => {
       const reservation = getReservation(roomNumber, date);
-      if (!reservation) return false;
-      return dayjs(date).isSame(reservation.startDate, 'day');
+      return reservation && dayjs(date).isSame(reservation.startDate, 'day');
+    };
+
+    const getReservationClass = (roomNumber, date) => {
+      const reservation = getReservation(roomNumber, date);
+      return reservation ? reservation.status : '';
     };
 
     const getReservationStyle = (roomNumber, date) => {
       const reservation = getReservation(roomNumber, date);
       if (!reservation) return {};
-      
+
       const startDate = dayjs(reservation.startDate);
       const endDate = dayjs(reservation.endDate);
       const duration = endDate.diff(startDate, 'day') + 1;
-      
+
       return {
-        width: `calc(${(duration - 1) * 100}%)`,
+        width: `calc(${duration * 100}% - 140%)`,
         position: 'absolute',
-        left: '50%',
-        transform: 'translateX(-50%)'
+        left: '70%',
+        height: '80%',
+        top: '10%',
+        zIndex: 1
       };
     };
 
@@ -171,152 +187,454 @@ export default {
       currentDate.value = currentDate.value.subtract(1, 'week');
     };
 
+    // Selección para nueva reserva
+    const showModal = ref(false);
+    const selectedRoom = ref(null);
+    const selectionStart = ref(null);
+    const selectionEnd = ref(null);
+    const isSelecting = ref(false);
+
+    const newReservation = ref({
+      guestName: '',
+      price: '',
+    });
+
+    const isDateAvailable = (roomNumber, date) => {
+      const reservations = reservations.value.filter(r => r.roomNumber === roomNumber);
+      const checkDate = dayjs(date);
+      
+      // Verificar si hay alguna reserva que bloquee la fecha
+      return !reservations.some(reservation => {
+        const startDate = dayjs(reservation.startDate);
+        const endDate = dayjs(reservation.endDate);
+        
+        // Una fecha está bloqueada solo si:
+        // 1. Es la fecha de inicio de una reserva
+        // 2. O es un día entre el inicio y el día anterior al checkout
+        return checkDate.isSame(startDate, 'day') || 
+               checkDate.isBetween(startDate, endDate.subtract(1, 'day'), 'day');
+      });
+    };
+
+    const startSelection = (room, date) => {
+      selectedRoom.value = room;
+      selectionStart.value = date;
+      selectionEnd.value = date;
+      isSelecting.value = true;
+    };
+
+    const updateSelection = (roomNumber, date) => {
+      if (isSelecting.value && roomNumber === selectedRoom.value) {
+        selectionEnd.value = date;
+      }
+    };
+
+    const endSelection = () => {
+      if (isSelecting.value) {
+        isSelecting.value = false;
+        
+        if (selectionStart.value === selectionEnd.value) {
+          alert('Debes seleccionar al menos una noche');
+          selectionStart.value = null;
+          selectionEnd.value = null;
+          return;
+        }
+        
+        showModal.value = true;
+      }
+    };
+
+    const saveReservation = () => {
+      const start = dayjs(selectionStart.value);
+      const end = dayjs(selectionEnd.value);
+      
+      const [startDate, endDate] = start.isAfter(end) 
+        ? [end.format('YYYY-MM-DD'), start.format('YYYY-MM-DD')]
+        : [start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD')];
+
+      reservations.value.push({
+        roomNumber: selectedRoom.value,
+        startDate,
+        endDate,
+        guestName: newReservation.value.guestName,
+        price: newReservation.value.price,
+        status: 'pending'
+      });
+
+      showModal.value = false;
+      newReservation.value = { guestName: '', price: '' };
+      selectionStart.value = null;
+      selectionEnd.value = null;
+    };
+
+    const cancelReservation = () => {
+      showModal.value = false;
+      newReservation.value = { guestName: '', price: '' };
+    };
+
+    const isInSelectionRange = (roomNumber, date) => {
+      if (!isSelecting.value || roomNumber !== selectedRoom.value) return false;
+      if (!selectionStart.value || !selectionEnd.value) return false;
+
+      const currentDate = dayjs(date);
+      const start = dayjs(selectionStart.value);
+      const end = dayjs(selectionEnd.value);
+
+      // Permitir que la fecha de inicio y fin sean la misma
+      return currentDate.isBetween(
+        start.isBefore(end) ? start : end,
+        start.isBefore(end) ? end : start,
+        'day',
+        '[]'
+      );
+    };
+
+    const getSelectionStyle = (roomNumber, date) => {
+      if (!isInSelectionRange(roomNumber, date)) return {};
+
+      const isFirst = date === selectionStart.value;
+      if (!isFirst) return {};
+
+      const start = dayjs(selectionStart.value);
+      const end = dayjs(selectionEnd.value);
+      
+      const [actualStart, actualEnd] = start.isAfter(end) 
+        ? [end, start] 
+        : [start, end];
+      
+      const duration = actualEnd.diff(actualStart, 'day') + 1;
+
+      return {
+        width: `calc(${duration * 100}% - 130%)`,
+        position: 'absolute',
+        left: '70%',
+        height: '80%',
+        top: '10%',
+        zIndex: 1
+      };
+    };
+
+    const startDate = ref(dayjs().format('YYYY-MM-DD'));
+    const endDate = ref(dayjs().add(1, 'month').format('YYYY-MM-DD'));
+
+    const viewMode = ref('month');
+    const setViewMode = (mode) => {
+      viewMode.value = mode;
+      if (mode === '10days') {
+        endDate.value = dayjs(startDate.value).add(10, 'days').format('YYYY-MM-DD');
+      } else {
+        endDate.value = dayjs(startDate.value).endOf('month').format('YYYY-MM-DD');
+      }
+    };
+
+    const getDayName = (date) => {
+      return dayjs(date).format('ddd');
+    };
+
+    const goToToday = () => {
+      startDate.value = dayjs().format('YYYY-MM-DD');
+      if (viewMode.value === '10days') {
+        endDate.value = dayjs().add(10, 'days').format('YYYY-MM-DD');
+      } else {
+        endDate.value = dayjs().endOf('month').format('YYYY-MM-DD');
+      }
+    };
+
+    const nextMonth = () => {
+      startDate.value = dayjs(startDate.value).add(1, 'month').startOf('month').format('YYYY-MM-DD');
+      endDate.value = dayjs(startDate.value).endOf('month').format('YYYY-MM-DD');
+    };
+
+    const prevMonth = () => {
+      startDate.value = dayjs(startDate.value).subtract(1, 'month').startOf('month').format('YYYY-MM-DD');
+      endDate.value = dayjs(startDate.value).endOf('month').format('YYYY-MM-DD');
+    };
+
     return {
       rooms,
+      reservations,
+      currentDate,
       currentWeek,
       currentMonth,
       nextWeek,
       prevWeek,
       getReservation,
+      isFirstDayOfReservation,
       getReservationClass,
       getReservationStyle,
-      isFirstDayOfReservation
+      startSelection,
+      updateSelection,
+      endSelection,
+      showModal,
+      selectedRoom,
+      selectionStart,
+      selectionEnd,
+      newReservation,
+      saveReservation,
+      cancelReservation,
+      isInSelectionRange,
+      getSelectionStyle,
+      startDate,
+      endDate,
+      viewMode,
+      setViewMode,
+      getDayName,
+      goToToday,
+      nextMonth,
+      prevMonth,
     };
   }
-}
+};
 </script>
 
 <style scoped>
 .calendario-container {
-  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
   background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
 }
 
-.table-container {
-  overflow-x: auto;
+.calendar-header {
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.calendar-body {
+  flex: 1;
   position: relative;
+  overflow: hidden;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  border-spacing: 0;
-  table-layout: fixed;
-}
-
-th, td {
-  border: 1px solid #ddd;
-  padding: 8px;
-  text-align: center;
-  height: 40px;
-  box-sizing: border-box;
-  width: 60px;
+.rooms-column {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 200px;
+  background: white;
+  z-index: 2;
+  border-right: 2px solid #e0e0e0;
 }
 
 .room-header {
-  width: 120px;
-  background: #f5f5f5;
-  font-weight: normal;
-  position: sticky;
-  left: 0;
-  z-index: 2;
-}
-
-.room-cell {
-  background: #f5f5f5;
-  text-align: left;
-  position: sticky;
-  left: 0;
-  z-index: 2;
-}
-
-.room-info {
+  height: 60px;
+  padding: 0 1rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  font-weight: 500;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.room-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #4CAF50;
+.room-row {
+  height: 50px;
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #e0e0e0;
+  background: white;
 }
 
-.room-indicator.dobl {
-  background: #2196F3;
+.days-area {
+  position: absolute;
+  left: 200px;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  overflow-x: auto;
+}
+
+.days-header {
+  height: 60px;
+  display: flex;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+  min-width: max-content;
+}
+
+.days-grid {
+  display: inline-flex;
+  flex-direction: column;
+  min-width: max-content;
+}
+
+.room-days {
+  display: flex;
+  height: 50px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .day-cell {
-  position: relative;
-  padding: 0;
-  height: 40px;
-  min-width: 60px;
-  overflow: visible;
-}
-
-.reservation {
-  position: absolute;
-  top: 0;
+  min-width: 150px;
   height: 100%;
-  background: #FF0000;
-  padding: 4px;
-  box-sizing: border-box;
-  z-index: 1;
+  border-right: 1px solid #e0e0e0;
+  position: relative;
 }
 
-.reservation.confirmed {
-  background: #4CAF50;
-}
-
-.reservation.pending {
-  background: #FFA726;
-}
-
-.reservation-content {
+.day-header {
+  min-width: 150px;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  border-right: 1px solid #e0e0e0;
+  background: #f8f9fa;
+}
+
+.day-number {
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.day-name {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+/* Contenedor para el grid y el header */
+.calendar-content {
+  position: relative;
+  min-width: max-content;
+}
+
+.room-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.room-indicator.indi {
+  background-color: #4285f4;
+}
+
+.room-indicator.dobl {
+  background-color: #34a853;
+}
+
+.reservation {
+  position: absolute;
+  height: 80%;
+  top: 10%;
+  background: #4285f4;
+  border-radius: 4px;
   color: white;
-  font-size: 12px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-align: center;
+  z-index: 1;
+  display: flex;
+  align-items: center;
   padding: 0 8px;
 }
 
-.guest-name {
-  font-weight: normal;
-  margin-bottom: 2px;
+.reservation-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.navigation {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 20px;
+/* Estilos para el scrollbar */
+.days-area::-webkit-scrollbar {
+  height: 8px;
 }
 
-.navigation button {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
+.days-area::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.days-area::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
   border-radius: 4px;
+}
+
+.days-area::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Estilos para la selección */
+.selecting {
+  background-color: rgba(66, 133, 244, 0.1);
+}
+
+/* Ajustes para los controles de navegación */
+.navigation-controls, .view-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.nav-btn, .today-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e0e0e0;
   background: white;
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s;
 }
 
-.navigation button:hover {
-  background: #f5f5f5;
+.view-controls button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #e0e0e0;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.date-range {
-  font-weight: bold;
-  font-size: 1.2em;
+.view-controls button.active {
+  background: #1a73e8;
+  color: white;
+  border-color: #1a73e8;
+}
+
+/* Estilos para el modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  width: 400px;
+  max-width: 90%;
+}
+
+.modal input {
+  width: 100%;
+  padding: 0.5rem;
+  margin: 0.5rem 0 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.modal button {
+  padding: 0.5rem 1rem;
+  margin-right: 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.modal button:first-of-type {
+  background: #1a73e8;
+  color: white;
+}
+
+.modal button:last-of-type {
+  background: #f1f3f4;
+  color: #3c4043;
 }
 </style>
