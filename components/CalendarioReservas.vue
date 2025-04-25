@@ -27,8 +27,20 @@
       </div>
 
       <!-- Área scrollable de días -->
-      <div class="days-area">
+      <div class="days-area" @scroll="handleScroll">
         <div class="calendar-content">
+          <!-- Header de meses -->
+          <div class="months-header">
+            <div v-for="(month, index) in currentMonths" 
+                 :key="index" 
+                 class="month-header"
+                 :style="getMonthHeaderStyle(month)"
+                 :ref="el => { if (el) monthRefs[index] = el }">
+              <div class="month-name" :style="getMonthNameStyle(index)">
+                {{ month.fullName }}
+              </div>
+            </div>
+          </div>
           <!-- Header de días -->
           <div class="days-header">
             <div v-for="day in currentWeek" :key="day.date" class="day-header">
@@ -84,7 +96,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import isBetween from 'dayjs/plugin/isBetween';
@@ -350,6 +362,110 @@ export default {
       endDate.value = dayjs(startDate.value).endOf('month').format('YYYY-MM-DD');
     };
 
+    const currentMonths = computed(() => {
+      const months = [];
+      let currentMonth = null;
+      let daysInMonth = 0;
+      let currentYear = null;
+      
+      currentWeek.value.forEach(day => {
+        const monthDate = dayjs(day.date);
+        const monthName = monthDate.format('MMMM');
+        const year = monthDate.format('YYYY');
+        
+        if (monthName !== currentMonth || year !== currentYear) {
+          if (currentMonth) {
+            months.push({
+              name: currentMonth,
+              year: currentYear,
+              days: daysInMonth,
+              fullName: `${currentMonth} ${currentYear}`
+            });
+          }
+          currentMonth = monthName;
+          currentYear = year;
+          daysInMonth = 1;
+        } else {
+          daysInMonth++;
+        }
+      });
+      
+      if (currentMonth) {
+        months.push({
+          name: currentMonth,
+          year: currentYear,
+          days: daysInMonth,
+          fullName: `${currentMonth} ${currentYear}`
+        });
+      }
+      
+      return months;
+    });
+
+    const handleScroll = (event) => {
+      const scrollLeft = event.target.scrollLeft;
+      const containerLeft = event.target.getBoundingClientRect().left;
+      let accumulatedWidth = 0;
+      
+      monthRefs.value.forEach((monthEl, index) => {
+        if (!monthEl) return;
+        
+        const rect = monthEl.getBoundingClientRect();
+        const monthWidth = rect.width;
+        const monthLeft = accumulatedWidth;
+        const monthRight = monthLeft + monthWidth;
+        const viewportStart = 200; // Ancho de la columna de habitaciones
+        
+        let translateX = 0;
+        
+        // Calculamos la posición del texto del mes
+        if (scrollLeft >= monthLeft && scrollLeft < monthRight) {
+          // Calculamos cuánto espacio queda disponible
+          const availableSpace = monthRight - scrollLeft;
+          
+          // Si hay suficiente espacio para mostrar el texto completo
+          if (availableSpace >= 150) { // Asumimos que 150px es suficiente para el texto
+            translateX = scrollLeft - monthLeft + viewportStart;
+            
+            // Nos aseguramos de que no se pase del límite derecho
+            const maxTranslate = monthWidth - 150; // Dejamos espacio para el texto
+            translateX = Math.min(translateX, maxTranslate);
+          } else {
+            // Si no hay suficiente espacio, lo mantenemos al final del mes actual
+            translateX = monthWidth - 150;
+          }
+        }
+        
+        monthNamePositions.value[index] = translateX;
+        accumulatedWidth += monthWidth;
+      });
+    };
+
+    const getMonthHeaderStyle = (month) => {
+      return {
+        width: `calc(${month.days * 150}px)`,
+        position: 'relative',
+        overflow: 'hidden'
+      };
+    };
+
+    const monthRefs = ref([]);
+    const monthNamePositions = ref([]);
+
+    const getMonthNameStyle = (index) => {
+      return {
+        transform: `translate(${monthNamePositions.value[index] || 0}px, -50%)`,
+        position: 'absolute',
+        left: '0',
+        top: '50%',
+        transition: 'transform 0.1s ease-out'
+      };
+    };
+
+    onMounted(() => {
+      monthNamePositions.value = new Array(currentMonths.value.length).fill(0);
+    });
+
     return {
       rooms,
       reservations,
@@ -382,6 +498,11 @@ export default {
       goToToday,
       nextMonth,
       prevMonth,
+      currentMonths,
+      getMonthHeaderStyle,
+      monthRefs,
+      handleScroll,
+      getMonthNameStyle,
     };
   }
 };
@@ -423,7 +544,7 @@ export default {
 }
 
 .room-header {
-  height: 60px;
+  height: 100px;
   padding: 0 1rem;
   display: flex;
   align-items: center;
@@ -448,6 +569,10 @@ export default {
   top: 0;
   bottom: 0;
   overflow-x: auto;
+  overflow-y: auto;
+  will-change: transform;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
 }
 
 .days-header {
@@ -636,5 +761,44 @@ export default {
 .modal button:last-of-type {
   background: #f1f3f4;
   color: #3c4043;
+}
+
+.months-header {
+  height: 40px;
+  display: flex;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+  min-width: max-content;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.month-header {
+  height: 100%;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  font-weight: 500;
+  text-transform: capitalize;
+  border-right: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  position: relative;
+  overflow: hidden;
+}
+
+.month-name {
+  position: absolute;
+  white-space: nowrap;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  will-change: transform;
+  left: 0;
+  top: 50%;
+  min-width: 140px;
+  text-align: center;
 }
 </style>
